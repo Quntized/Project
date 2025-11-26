@@ -53,7 +53,7 @@ Connect the components to the Pico using the pins defined below.
 You need Python installed to run the monitor script.
 ```bash
 pip install pygame pyserial
-
+```
 ### 2. On the Pico (Firmware)
 You need the Raspberry Pi Pico C/C++ SDK.
 * **Recommended:** Use **VS Code** with the official **"Raspberry Pi Pico"** extension.
@@ -76,3 +76,4 @@ You typically need `sudo` permissions to access the USB serial port (`/dev/ttyAC
 
 ```bash
 sudo python3 reactor_monitor.py
+```
