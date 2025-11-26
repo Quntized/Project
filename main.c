@@ -1625,7 +1625,7 @@ void spontaneous() {
 // ======================================== Core 1 Animation =======================================
 
 
-// Add after chart constants
+// 
 void drawChartBorder(int x0, int y0) {
   // Draw border rectangle
   drawHLine(x0, y0, CHART_WIDTH, WHITE);                       // Top
@@ -1732,7 +1732,7 @@ void core1_main() {
   pt_add_thread(protothread_encoder2);
   pt_add_thread(protothread_encoder3);
   pt_add_thread(protothread_encoder4);
-  pt_add_thread(protothread_buttons);  // Add the button thread
+  pt_add_thread(protothread_buttons);  // 
   pt_schedule_start;
 }
 
@@ -1786,7 +1786,7 @@ static PT_THREAD (protothread_anim(struct pt *pt))
     initControlRods() ;
     drawLegend() ;
     initStats() ;
-    // === ADD THIS BLOCK ===
+    // 
     // Clear Chart Areas
     fillRect(LEFT_CHART_X, CHART_Y, CHART_WIDTH, CHART_HEIGHT, BLACK);
     fillRect(RIGHT_CHART_X, CHART_Y, CHART_WIDTH, CHART_HEIGHT, BLACK);
@@ -1868,14 +1868,14 @@ static PT_THREAD (protothread_anim(struct pt *pt))
       // 2. THE FIX: DRAWING AND FRAME END
       // ==========================================
 
-      // Draw the white border lines
+      // Drawwhite border lines
       drawArena() ;
       drawChartBorder(LEFT_CHART_X, CHART_Y);
       drawChartBorder(RIGHT_CHART_X, CHART_Y);
       drawChartAxes(LEFT_CHART_X, CHART_Y);
       drawChartAxes(RIGHT_CHART_X, CHART_Y);
 
-      // Draw text stats (like "Neutrons: 50")
+      // DraW text stats (like "Neutrons: 50")
       refreshStats();
 
       // Tell Laptop: "We are done drawing this frame, show it now!"
@@ -2029,7 +2029,7 @@ int main(){
   gpio_pull_up(ENCODER_DT);
   last_CLK_state = gpio_get(ENCODER_CLK);
 
-  // Initialize the second encoder GPIO pins
+  // 
   gpio_init(ENCODER2_CLK);
   gpio_init(ENCODER2_DT);
   gpio_set_dir(ENCODER2_CLK, GPIO_IN);
@@ -2060,15 +2060,15 @@ int main(){
   gpio_set_dir(PIN_BUTTON_1, GPIO_IN) ;
   gpio_pull_up(PIN_BUTTON_1) ;
   
-  gpio_init(PIN_BUTTON_2); // <--- Added Button 2 (Auto/Manual)
+  gpio_init(PIN_BUTTON_2); // 
   gpio_set_dir(PIN_BUTTON_2, GPIO_IN);
   gpio_pull_up(PIN_BUTTON_2);
   
-  gpio_init(PIN_BUTTON_3); // <--- Added Button 3
+  gpio_init(PIN_BUTTON_3); //
   gpio_set_dir(PIN_BUTTON_3, GPIO_IN);
   gpio_pull_up(PIN_BUTTON_3);
 
-  gpio_init(PIN_BUTTON_4); // <--- Added Button 4
+  gpio_init(PIN_BUTTON_4); //
   gpio_set_dir(PIN_BUTTON_4, GPIO_IN);
   gpio_pull_up(PIN_BUTTON_4);
 
