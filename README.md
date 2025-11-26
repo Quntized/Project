@@ -53,3 +53,26 @@ Connect the components to the Pico using the pins defined below.
 You need Python installed to run the monitor script.
 ```bash
 pip install pygame pyserial
+
+### 2. On the Pico (Firmware)
+You need the Raspberry Pi Pico C/C++ SDK.
+* **Recommended:** Use **VS Code** with the official **"Raspberry Pi Pico"** extension.
+* Ensure `CMake` and `Ninja` are installed on your system.
+
+## ⚙️ How to Run
+
+### Step 1: Build & Flash the Firmware
+1. Open this project folder in **VS Code**.
+2. Click **"Compile Project"** (or run `cmake` build) in the extension sidebar.
+3. Unplug the Pico. Hold the **BOOTSEL** button and plug it in via USB.
+4. Drag and drop the generated `build/reactor_sim.uf2` file onto the **RPI-RP2** drive.
+5. The Pico will reboot and begin running the physics simulation immediately.
+
+### Step 2: Start the Monitor
+Open your terminal inside the project folder and run the Python display script.
+
+**On Linux (Ubuntu/Debian):**
+You typically need `sudo` permissions to access the USB serial port (`/dev/ttyACM0`).
+
+```bash
+sudo python3 reactor_monitor.py
