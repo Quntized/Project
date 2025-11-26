@@ -9,15 +9,17 @@ The Pico handles the heavy lifting: it calculates neutron diffusion, uranium fis
 ## 🚀 Features
 * **Particle Physics Engine:** Simulates individual neutrons interacting with fuel, moderators, and control rods.
 * **Multithreaded Architecture:** Uses Protothreads to handle physics calculations, serial communication, and user inputs simultaneously.
+* **Audio Synthesis:** Uses DMA (Direct Memory Access) to drive a DAC, generating Geiger-counter clicks and reactor hum without using the CPU.
 * **Real-time Telemetry:** Live graphing of neutron flux, thermal capacity, and reaction history.
 * **Physical Control Console:** Uses rotary encoders and buttons to manually operate control rods and cooling pumps.
 
 ## 🛠️ Hardware Required
 * **1x Raspberry Pi Pico** (RP2040)
 * **4x Rotary Encoders** (KY-040 or standard)
-* **2x Push Buttons** (Tactile switches)
+* **4x Push Buttons** (Tactile switches)
 * **1x Breadboard**
 * **Jumper Wires** (Male-to-Male)
+* **(Optional) Audio:** MCP4822 DAC + Speaker
 
 ## 🔌 Wiring Guide / Pinout
 
@@ -33,8 +35,17 @@ Connect the components to the Pico using the pins defined below.
 | **Encoder 4** | Reaction Multiplier | CLK | DT | **GP8, GP9** | 11, 12 |
 | **Button 1** | **SCRAM** (Emergency) | Pin 1 | GND | **GP2** | 4 |
 | **Button 2** | Auto/Manual Toggle | Pin 1 | GND | **GP4** | 6 |
+| **Button 3** | Sync Position | Pin 1 | GND | **GP5** | 7 |
+| **Button 4** | Sim Speed (50%/100%)| Pin 1 | GND | **GP3** | 5 |
 
 > **Note:** Buttons connect directly between the GPIO pin and Ground. The code uses internal pull-up resistors.
+
+### 🧠 System Resources Used
+* **Core 0:** Physics Engine, Serial Output, Input Handling.
+* **Core 1:** (Reserved for future charts/calculation offloading).
+* **DMA Channel 1:** Transfers audio sine-wave table to SPI TX buffer.
+* **DMA Channel 2:** Control channel (Chains to Ch1) to create a circular audio buffer.
+* **SPI1:** Hardware interface for the Audio DAC (Pins 10, 11, 12, 13).
 
 ## 💻 Software Prerequisites
 
