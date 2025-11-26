@@ -1,16 +1,13 @@
 # Ignore the build folder
 build/
 
-# Ignore compiled binaries (just in case they are outside build)
 *.uf2
 *.elf
 *.bin
 *.hex
 *.map
 
-# Ignore Python cache
 __pycache__/
 *.pyc
 
-# Ignore VS Code settings (optional, but recommended)
 .vscode/
