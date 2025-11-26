@@ -77,3 +77,9 @@ You typically need `sudo` permissions to access the USB serial port (`/dev/ttyAC
 ```bash
 sudo python3 reactor_monitor.py
 ```
+## 📚 References & Credits
+This project was built based on the course material and Protothreads libraries developed by:
+* **Hunter Adams** (Cornell University) - *RP2040 Protothreads & VGA Graphics*
+* **Bruce Land** (Cornell University) - *Real-time Embedded Systems Course*
+
+The simulation logic has been adapted to run over Serial/USB for modern display support while maintaining the original physics calculations.
