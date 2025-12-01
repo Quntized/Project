@@ -1408,68 +1408,76 @@ static PT_THREAD(protothread_encoder2(struct pt *pt)) {
   PT_END(pt);
 }
 
-// ==========================================
-// ENCODER 3: Target Neutrons (The Blue Line)
-// ==========================================
+
+// =============================================================
+// ENCODER 3: Target Neutrons (Improved Precision)
+// =============================================================
 static PT_THREAD(protothread_encoder3(struct pt *pt)) {
     PT_BEGIN(pt);
     static int enc3_clk_state;
-    
+    static int enc3_last_state = 0; // Initialize properly
+
     while(1) {
-        // Read current state of CLK
+        // 1. Read CLK
         enc3_clk_state = gpio_get(ENCODER3_CLK);
 
-        // If state changed...
-        if (enc3_clk_state != last_CLK_state3) {
-            // Check DT to determine direction
+        // 2. Only act if state CHANGED (and is stable)
+        if (enc3_clk_state != enc3_last_state && enc3_clk_state == 1) {
+            // 3. Check DT to find direction
             if (gpio_get(ENCODER3_DT) != enc3_clk_state) {
-                // Clockwise -> Increase Target
-                neutrons_target_num += 2; // Increase by 2 for speed
+                neutrons_target_num += 5; // Clockwise: Increase by 5 (Faster)
             } else {
-                // Counter-Clockwise -> Decrease Target
-                neutrons_target_num -= 2;
+                neutrons_target_num -= 5; // Counter-CW: Decrease by 5
             }
-            
-            // SAFETY LIMITS (0 to 200)
-            if (neutrons_target_num < 0) neutrons_target_num = 0;
-            if (neutrons_target_num > 200) neutrons_target_num = 200;
+
+            // 4. Safety Limits (Keep graph readable)
+            if (neutrons_target_num < 10) neutrons_target_num = 10;
+            if (neutrons_target_num > 400) neutrons_target_num = 400;
         }
+
+        enc3_last_state = enc3_clk_state;
         
-        last_CLK_state3 = enc3_clk_state;
-        PT_YIELD_usec(1000); // Check every 1ms (Fast response)
+        // 5. Run VERY fast (500us) to catch quick turns
+        PT_YIELD_usec(500); 
     }
     PT_END(pt);
 }
 
-// ==========================================
-// ENCODER 4: Neutron Spawn Rate (N Decayed)
-// ==========================================
+// =============================================================
+// ENCODER 4: Spawn Rate (High Stability)
+// =============================================================
 static PT_THREAD(protothread_encoder4(struct pt *pt)) {
     PT_BEGIN(pt);
     static int enc4_clk_state;
+    static int enc4_last_state = 0;
+    static uint32_t enc4_timer = 0; // Debounce Timer
 
     while(1) {
-        // Read current state of CLK
         enc4_clk_state = gpio_get(ENCODER4_CLK);
 
-        if (enc4_clk_state != last_CLK_state4) {
-            if (gpio_get(ENCODER4_DT) != enc4_clk_state) {
-                // Clockwise -> Increase Spawn
-                numNeutronSpawn += 1;
-            } else {
-                // Counter-Clockwise -> Decrease Spawn
-                numNeutronSpawn -= 1;
-            }
+        // 1. Check for change AND check if 100ms has passed since last change
+        // This prevents the number from jumping 1->6 in a split second.
+        if (enc4_clk_state != enc4_last_state && enc4_clk_state == 1) {
+            
+            if (time_us_32() - enc4_timer > 100000) { // 100ms Debounce
+                
+                if (gpio_get(ENCODER4_DT) != enc4_clk_state) {
+                    numNeutronSpawn += 1; // Increase
+                } else {
+                    numNeutronSpawn -= 1; // Decrease
+                }
 
-            // SAFETY LIMITS (CRITICAL!)
-            // Do not let this go below 1 or above 6.
-            // If this goes high (e.g. 20), your laptop will freeze from too many particles.
-            if (numNeutronSpawn < 1) numNeutronSpawn = 1;
-            if (numNeutronSpawn > 6) numNeutronSpawn = 6;
+                // Hard Limits (1 to 6)
+                if (numNeutronSpawn < 1) numNeutronSpawn = 1;
+                if (numNeutronSpawn > 6) numNeutronSpawn = 6;
+
+                // Reset timer
+                enc4_timer = time_us_32();
+            }
         }
 
-        last_CLK_state4 = enc4_clk_state;
-        PT_YIELD_usec(2000); // Check every 2ms
+        enc4_last_state = enc4_clk_state;
+        PT_YIELD_usec(1000); 
     }
     PT_END(pt);
 }
@@ -1770,132 +1778,146 @@ static PT_THREAD (protothread_serial(struct pt *pt))
 
 // =============================================== Main Animation Thread ========================================
 // Animation on core 0
+// ===============================================
+// Main Animation Thread (Core 0)
+// ===============================================
 static PT_THREAD (protothread_anim(struct pt *pt))
 {
-    // Mark beginning of thread
     PT_BEGIN(pt);
 
-    // Variables for maintaining frame rate
-    static int begin_time ;
+    static int begin_time;
 
-    initNucleus() ;
+    // --- Initialization Phase ---
+    initNucleus();
     initWater();
-    drawNucleus() ;
-    initNeutron() ;
-    initGraphite() ;
-    initControlRods() ;
-    drawLegend() ;
-    initStats() ;
-    // 
-    // Clear Chart Areas
+    drawNucleus();
+    initNeutron();
+    initGraphite();
+    initControlRods();
+    drawLegend();
+    initStats();
+
+    // Clear Chart Backgrounds (Once at startup)
     fillRect(LEFT_CHART_X, CHART_Y, CHART_WIDTH, CHART_HEIGHT, BLACK);
     fillRect(RIGHT_CHART_X, CHART_Y, CHART_WIDTH, CHART_HEIGHT, BLACK);
-    
-    // Draw Borders and Axes
 
-    // ======================
+    while(1) {
+      begin_time = time_us_32(); 
 
-  while(1) {
-      // Measure time at start of thread
-      begin_time = time_us_32() ; 
-
-      //For each neutron:
+      // --- Physics Loop: Update all 2000 Neutrons ---
       for (int i = 0; i < neutrons_max; i++){
         if (neutrons[i].active == 1){ 
-          clearNeutron(i) ;
+          clearNeutron(i);
 
           if (neutrons[i].energy < neutron_thermal_threshold){
-            for (int j = 0; j < num_uranium_active; j++) collisionNucleus(uraniumNuclei[j], i) ;
-            for (int j = 0; j < num_xenon_active; j++) collisionNucleus(xenonNuclei[j], i) ;
-          } else{
-            graphiteModeration(i) ;
+            // Thermal: Can cause fission
+            for (int j = 0; j < num_uranium_active; j++) collisionNucleus(uraniumNuclei[j], i);
+            for (int j = 0; j < num_xenon_active; j++) collisionNucleus(xenonNuclei[j], i);
+          } else {
+            // Fast: Can be moderated by graphite
+            graphiteModeration(i);
           }
 
-          waterModeration(i) ;
-          controlRodCollision(i) ;
-          wallsAndEdges(i) ;
-          drawNeutron(i) ;
+          waterModeration(i);
+          controlRodCollision(i);
+          wallsAndEdges(i);
+          drawNeutron(i);
         }
       }
 
+      // Global Updates
       waterCooling();
-      spontaneous() ; 
-      moveControlRods() ;
+      spontaneous(); 
+      moveControlRods();
       redrawScreen(); 
       
       // ==========================================
-      // 1. CHART LOGIC (You placed this correctly!)
+      // CHART ANIMATION LOGIC
       // ==========================================
       
-      // Clear the "Next" vertical line
+      // 1. Clear the "Eraser Bar" (Scanline effect)
       drawVLine(plotX + 1, CHART_Y + AXIS_MARGIN, CHART_HEIGHT - 2*AXIS_MARGIN, BLACK);
-      drawVLine(plotX_right + 1, CHART_Y + AXIS_MARGIN, CHART_HEIGHT - 2*AXIS_MARGIN, BLACK);
-
-      // Draw Left Chart (Real-time Stats)
+      
+      // 2. Draw Left Chart (Real-time Stats)
       if (plotX > LEFT_CHART_X + AXIS_MARGIN) {
+          // Xenon (White)
           int y_xenon = CHART_Y + CHART_HEIGHT - AXIS_MARGIN - (num_xenon_active * AXIS_LENGTH_Y / 100);
           drawPixel(plotX, y_xenon, WHITE);
-      
+          // Control Rods (Green)
           int y_rod = CHART_Y + CHART_HEIGHT - AXIS_MARGIN - ((fix2int15(controlRods_y) + 213) * AXIS_LENGTH_Y / 225) - 1;
           drawPixel(plotX, y_rod, DARK_GREEN);
-      
+          // EAP (Blue)
           int y_eap = CHART_Y + CHART_HEIGHT - AXIS_MARGIN - (2 + fix2int15(multfix15(divfix(EAP, int2fix15(840)), int2fix15(AXIS_LENGTH_Y - 2))));
           drawPixel(plotX, y_eap, BLUE);
       }
 
-      // Update Collision History
-      if ((time_us_32() - last_collision_time) >= 1000000) {
+      // 3. FAST Update Right Chart (Oscilloscope Style)
+      // Update every 50ms (20 times per second) for smooth waves
+      if ((time_us_32() - last_collision_time) >= 50000) {
           collision_history[collision_index] = uranium_collision_count;
-          collision_index = (collision_index + 1) % AXIS_LENGTH_X;
+          
+          // Calculate coordinates for line drawing
+          int current_x = RIGHT_CHART_X + AXIS_MARGIN + collision_index;
+          int prev_x    = (collision_index == 0) ? current_x : current_x - 1;
+          
+          int current_y = CHART_Y + CHART_HEIGHT - AXIS_MARGIN - (collision_history[collision_index] * AXIS_LENGTH_Y / 20);
+          int prev_idx  = (collision_index == 0) ? 0 : collision_index - 1;
+          int prev_y    = CHART_Y + CHART_HEIGHT - AXIS_MARGIN - (collision_history[prev_idx] * AXIS_LENGTH_Y / 20);
+
+          // Erase ahead
+          int eraser_x = current_x + 5; 
+          if (eraser_x < RIGHT_CHART_X + AXIS_MARGIN + AXIS_LENGTH_X) {
+             drawVLine(eraser_x, CHART_Y + AXIS_MARGIN, CHART_HEIGHT - 2*AXIS_MARGIN, BLACK);
+          }
+
+          // Draw Waveform Line
+          drawLine(prev_x, prev_y, current_x, current_y, WHITE);
+
+          collision_index++;
+          if (collision_index >= AXIS_LENGTH_X) {
+              collision_index = 0; // Wrap around
+              // Clear start of chart
+              drawVLine(RIGHT_CHART_X + AXIS_MARGIN, CHART_Y + AXIS_MARGIN, CHART_HEIGHT - 2*AXIS_MARGIN, BLACK);
+          }
+          
           uranium_collision_count = 0;
           last_collision_time = time_us_32();
       }
 
-      // Draw Right Chart (Simple Dot)
-      if (collision_index > 0) {
-         int y_coll = CHART_Y + CHART_HEIGHT - AXIS_MARGIN - (collision_history[(collision_index-1 < 0 ? 0 : collision_index-1)] * AXIS_LENGTH_Y / 20);
-         drawPixel(plotX_right, y_coll, WHITE); 
-      }
-
-      // Advance the "Cursor"
+      // Advance Left Chart Cursor
       plotX++;
-      plotX_right++;
       if (plotX >= LEFT_CHART_X + AXIS_MARGIN + AXIS_LENGTH_X) plotX = LEFT_CHART_X + AXIS_MARGIN;
-      if (plotX_right >= RIGHT_CHART_X + AXIS_MARGIN + AXIS_LENGTH_X) plotX_right = RIGHT_CHART_X + AXIS_MARGIN;
-
 
       // ==========================================
-      // 2. THE FIX: DRAWING AND FRAME END
+      // UI REFRESH (Every Frame)
       // ==========================================
 
-      // Drawwhite border lines
-      drawArena() ;
+      // Draw the static white lines (Borders & Axes)
+      drawArena();
       drawChartBorder(LEFT_CHART_X, CHART_Y);
       drawChartBorder(RIGHT_CHART_X, CHART_Y);
       drawChartAxes(LEFT_CHART_X, CHART_Y);
       drawChartAxes(RIGHT_CHART_X, CHART_Y);
 
-      // DraW text stats (like "Neutrons: 50")
+      // Update Text Stats
       refreshStats();
 
-      // Tell Laptop: "We are done drawing this frame, show it now!"
+      // Trigger Laptop Display Update
       printf("FRAME_END\n");
 
       // ==========================================
 
-
-      // Delay logic
+      // Maintain Frame Rate
       if (sim_speed_state == 1) {
-        spare_time = (FRAME_RATE  * 2) - (time_us_32() - begin_time) ;
+        spare_time = (FRAME_RATE * 2) - (time_us_32() - begin_time);
       } else {
-        spare_time = FRAME_RATE   - (time_us_32() - begin_time) ;
+        spare_time = FRAME_RATE - (time_us_32() - begin_time);
       }
 
-      PT_YIELD_usec(spare_time) ;
-    } // END WHILE(1)
+      PT_YIELD_usec(spare_time);
+    } 
   PT_END(pt);
-} // animation thread
-
+}
 
 
 // ========================================
