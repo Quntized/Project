@@ -8,7 +8,7 @@ Unlike standard simulations that run entirely on a PC, this project uses the **R
 
 ## 🚀 Features
 
-* **Particle Physics Engine:** Simulates ~2,000 individual neutrons interacting with fuel, moderators, and control rods.
+* **Particle Physics Engine:** Simulates ~2,000 individual neutrons interacting with fuel, moderators, and control rods(Particle can be control).
 * **Multithreaded Architecture:**
     * **Core 0:** Physics calculations, Thermal dynamics, Serial Telemetry.
     * **Core 0 (Threaded):** Real-time Input polling (Encoders/Buttons).
