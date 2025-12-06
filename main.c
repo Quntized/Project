@@ -66,14 +66,10 @@ typedef signed int fix15;
 #define int2fix15(a) ((fix15)(a << 15))
 #define fix2int15(a) ((int)(((a) + 0x4000) >> 15))
 #define divfix(a,b) (fix15)(div_s64s64( (((signed long long)(a)) << 15), ((signed long long)(b))))
-
-// Add at top with other function declarations
 void collisionNucleus(int nuc_index, int neutron_index);
 void spontaneous(void);
 void redrawScreen(void);
-
-// Declare sim_speed_state globally
-static volatile int sim_speed_state = 0; // 0 for normal speed, 1 for increased speed
+static volatile int sim_speed_state = 0; 
 
 //========================================================Audio DMA==========================================================
 
@@ -2050,8 +2046,6 @@ int main(){
   gpio_pull_up(ENCODER_CLK);
   gpio_pull_up(ENCODER_DT);
   last_CLK_state = gpio_get(ENCODER_CLK);
-
-  // 
   gpio_init(ENCODER2_CLK);
   gpio_init(ENCODER2_DT);
   gpio_set_dir(ENCODER2_CLK, GPIO_IN);
@@ -2082,23 +2076,19 @@ int main(){
   gpio_set_dir(PIN_BUTTON_1, GPIO_IN) ;
   gpio_pull_up(PIN_BUTTON_1) ;
   
-  gpio_init(PIN_BUTTON_2); // 
+  gpio_init(PIN_BUTTON_2); 
   gpio_set_dir(PIN_BUTTON_2, GPIO_IN);
   gpio_pull_up(PIN_BUTTON_2);
   
-  gpio_init(PIN_BUTTON_3); //
+  gpio_init(PIN_BUTTON_3); 
   gpio_set_dir(PIN_BUTTON_3, GPIO_IN);
   gpio_pull_up(PIN_BUTTON_3);
 
-  gpio_init(PIN_BUTTON_4); //
+  gpio_init(PIN_BUTTON_4); 
   gpio_set_dir(PIN_BUTTON_4, GPIO_IN);
   gpio_pull_up(PIN_BUTTON_4);
-
-  // add threads
   pt_add_thread(protothread_serial);
   pt_add_thread(protothread_anim);
-  // === ADD THESE LINES ===
-  // Move inputs to Core 0
   pt_add_thread(protothread_encoder);
   pt_add_thread(protothread_encoder2); 
   pt_add_thread(protothread_encoder3);
