@@ -124,6 +124,7 @@ sudo python3 reactor_monitor.py
 ---
 
 ## 📚 References & Credits
+This project is built upon the reactor simulation framework developed by Hunter Adams (Cornell University). I have modified the source code to implement custom control logic, integrated specific hardware drivers for my setup, and refined the user interface for finer control
 This project was built based on the course material and Protothreads libraries developed by:
 
 * **Hunter Adams** (Cornell University) - *RP2040 Protothreads & Physics Architectures*

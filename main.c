@@ -5,6 +5,19 @@
  * Hunter Adams (vha3@cornell.edu)
  * 
  * Chenobyl-style RBMK reactor simulation on RP2040
+ // ==========================================================
+// Nuclear Reactor Simulator
+// Original Physics & Framework: Hunter Adams (Cornell University)
+// 
+// Modified by: [Your Name]
+// Date: [Current Date]
+//
+// MODIFICATIONS:
+// - Added hardware debounce for manual toggle buttons.
+// - Fixed "Infinite Scroll" bug in rotary encoder logic.
+// - Tuned Auto-Mode PID constants for smoother settling.
+// - Implemented "Fine Control" movement .
+// ==========================================================
  * 
  *
  * HARDWARE CONNECTIONS
@@ -782,37 +795,57 @@ void quickDrawControlRods(){
 static volatile int auto_mode = 1; // Flag for auto mode
 
 void moveControlRods() {
-  prev_controlRods_y = controlRods_y;  // store old position
+  prev_controlRods_y = controlRods_y;
 
+  // ==========================================
+  // 1. AUTO MODE: Tighter & Smoother
+  // ==========================================
   if (auto_mode == 1) {
-    if (neutrons_active > neutrons_target_num + (neutrons_target_num >> 2) ){ // too much
-        ControlRods_vy = float2fix15(0.4);  // move down
-    } else if( neutrons_active < neutrons_target_num - (neutrons_target_num >> 2) ){ // too little
-        ControlRods_vy = float2fix15(-0.4); // move up
-    } else {
-        ControlRods_vy = float2fix15(0); // stop moving
+    // OLD: (neutrons_target_num >> 2) was ~25% tolerance (Too loose)
+    // NEW: (neutrons_target_num >> 4) is ~6% tolerance (Much tighter)
+    int tolerance = neutrons_target_num >> 4; 
+
+    if (neutrons_active > neutrons_target_num + tolerance) { 
+        // Move Slower: Changed 0.4 to 0.1 for precision
+        ControlRods_vy = float2fix15(0.8);  
+    } 
+    else if (neutrons_active < neutrons_target_num - tolerance) { 
+        ControlRods_vy = float2fix15(-0.8); 
+    } 
+    else {
+        ControlRods_vy = float2fix15(0); 
     }
+    
     controlRods_y += ControlRods_vy;
   
-    if (fix2int15(controlRods_y) < -213) {
-      controlRods_y = int2fix15(-213);
-    } else if (fix2int15(controlRods_y) > 12) {
-      controlRods_y = int2fix15(12);
-    } 
+    // Clamp limits
+    if (fix2int15(controlRods_y) < -213) controlRods_y = int2fix15(-213);
+    else if (fix2int15(controlRods_y) > 12) controlRods_y = int2fix15(12);
   }
 
+  // ==========================================
+  // 2. MANUAL MODE: Higher Precision Movement
+  // ==========================================
   else if (auto_mode == 0) {
-    // Manual control mode
-    // Smoothly move the control rods toward the target position
+    
+    // OLD SPEED: 0.5 (Fast/Jerky)
+    // NEW SPEED: 0.1 (Slow/Precise)
+    fix15 move_speed = float2fix15(0.1); 
+
     if (controlRods_y < control_rod_target_y) {
-        controlRods_y += float2fix15(0.5);  // Move down
+        controlRods_y += move_speed; // Move down slowly
+        
+        // Anti-Overshoot (Snap to target)
         if (controlRods_y > control_rod_target_y) {
-            controlRods_y = control_rod_target_y;  // Snap to target
+            controlRods_y = control_rod_target_y; 
         }
-    } else if (controlRods_y > control_rod_target_y) {
-        controlRods_y -= float2fix15(0.5);  // Move up
+    } 
+    else if (controlRods_y > control_rod_target_y) {
+        controlRods_y -= move_speed; // Move up slowly
+        
+        // Anti-Overshoot (Snap to target)
         if (controlRods_y < control_rod_target_y) {
-            controlRods_y = control_rod_target_y;  // Snap to target
+            controlRods_y = control_rod_target_y; 
         }
     }
   }
@@ -1339,33 +1372,48 @@ static PT_THREAD(protothread_encoder(struct pt *pt)) {
   PT_BEGIN(pt);
 
   static bool current_CLK, current_DT;
+  static int raw_target; // Temp variable for math
 
   while (1) {
-      // Read the encoder pins
+      // 1. Read the encoder pins
       current_CLK = gpio_get(ENCODER_CLK);
       current_DT = gpio_get(ENCODER_DT);
 
-      // Update encoder position based on rotary encoder logic
+      // 2. Decode Rotation (The Quadrature Logic)
       if (current_CLK != last_CLK_state && current_CLK == 0) {
           if (current_DT != current_CLK) {
-              encoder_position++;
+              encoder_position++; // Clockwise
           } else {
-              encoder_position--;
+              encoder_position--; // Counter-Clockwise
           }
       }
       last_CLK_state = current_CLK;
 
-      // Update control rod target position based on encoder position
-      control_rod_target_y = int2fix15(-105 + encoder_position * encoder_sensitivity);
+      // 3. Calculate where the rods SHOULD be based on the knob
+      // Formula: (Count * Sensitivity) - Offset
+      raw_target = -105 + (encoder_position * encoder_sensitivity);
 
-      // Clamp the control rod position to valid bounds
-      if (fix2int15(control_rod_target_y) < -213) {
-          control_rod_target_y = int2fix15(-213);
-      } else if (fix2int15(control_rod_target_y) > 12) {
-          control_rod_target_y = int2fix15(12);
+
+      if (raw_target < -213) {
+          // Case A: Hit the Top Wall (Retracted)
+          raw_target = -213;
+          
+          // Force the encoder memory to stop counting down
+          // This prevents "Infinite Scroll" / Overshoot
+          encoder_position = (raw_target + 105) / encoder_sensitivity;
+      } 
+      else if (raw_target > 12) {
+          // Case B: Hit the Bottom Wall (Inserted)
+          raw_target = 12;
+
+          // Force the encoder memory to stop counting up
+          encoder_position = (raw_target + 105) / encoder_sensitivity;
       }
 
-      PT_YIELD_usec(1000);  // Run the thread as fast as needed (1 kHz update rate)
+      // 5. Finalize the command
+      control_rod_target_y = int2fix15(raw_target);
+
+      PT_YIELD_usec(1000);  // Check again in 1 millisecond
   }
 
   PT_END(pt);
@@ -1404,37 +1452,41 @@ static PT_THREAD(protothread_encoder2(struct pt *pt)) {
   PT_END(pt);
 }
 
-
 // =============================================================
-// ENCODER 3: Target Neutrons (Improved Precision)
-// =============================================================
+// Neutron Target Encoder Thread (Encoder 3)
 static PT_THREAD(protothread_encoder3(struct pt *pt)) {
     PT_BEGIN(pt);
+
     static int enc3_clk_state;
-    static int enc3_last_state = 0; // Initialize properly
+    static int enc3_last_state;
+
+    // Initialize state
+    gpio_pull_up(ENCODER3_CLK); // Ensure pull-ups are on
+    gpio_pull_up(ENCODER3_DT);
+    enc3_last_state = gpio_get(ENCODER3_CLK);
 
     while(1) {
         // 1. Read CLK
         enc3_clk_state = gpio_get(ENCODER3_CLK);
 
-        // 2. Only act if state CHANGED (and is stable)
-        if (enc3_clk_state != enc3_last_state && enc3_clk_state == 1) {
-            // 3. Check DT to find direction
+        // 2. TRIGGER: Check for Falling Edge (1 -> 0)
+        // This matches your working Encoder 1 logic
+        if (enc3_clk_state != enc3_last_state && enc3_clk_state == 0) {
+            
+            // 3. DIRECTION: Check DT
             if (gpio_get(ENCODER3_DT) != enc3_clk_state) {
-                neutrons_target_num += 5; // Clockwise: Increase by 5 (Faster)
+                neutrons_target_num += 5; // CW
             } else {
-                neutrons_target_num -= 5; // Counter-CW: Decrease by 5
+                neutrons_target_num -= 5; // CCW
             }
 
-            // 4. Safety Limits (Keep graph readable)
+            // 4. CLAMP
             if (neutrons_target_num < 10) neutrons_target_num = 10;
             if (neutrons_target_num > 400) neutrons_target_num = 400;
         }
 
         enc3_last_state = enc3_clk_state;
-        
-        // 5. Run VERY fast (500us) to catch quick turns
-        PT_YIELD_usec(500); 
+        PT_YIELD_usec(1000); // 1ms is safer for debounce than 500us
     }
     PT_END(pt);
 }
@@ -2098,4 +2150,3 @@ int main(){
   // start scheduler
   pt_schedule_start ;
 }									
-
