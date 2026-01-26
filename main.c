@@ -9,8 +9,8 @@
 // Nuclear Reactor Simulator
 // Original Physics & Framework: Hunter Adams (Cornell University)
 // 
-// Modified by: [Your Name]
-// Date: [Current Date]
+// Modified by: Md. Sajid Khan
+// Date: 27/01/26
 //
 // MODIFICATIONS:
 // - Added hardware debounce for manual toggle buttons.
@@ -2085,8 +2085,8 @@ int main(){
   } 
 
   // start core 1 
-  //multicore_reset_core1();
-  //multicore_launch_core1(&core1_main);
+  multicore_reset_core1();
+  multicore_launch_core1(&core1_main);
 
   //stdio_uart_init_full(uart0, 0, 0, 0);  // Disable UART0
 
