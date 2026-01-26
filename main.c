@@ -21,14 +21,7 @@
  * 
  *
  * HARDWARE CONNECTIONS
- *  - GPIO 16 ---> VGA Hsync
- *  - GPIO 17 ---> VGA Vsync
- *  - GPIO 18 ---> 470 ohm resistor ---> VGA Green 
- *  - GPIO 19 ---> 330 ohm resistor ---> VGA Green
- *  - GPIO 20 ---> 330 ohm resistor ---> VGA Blue
- *  - GPIO 21 ---> 330 ohm resistor ---> VGA Red
- *  - RP2040 GND ---> VGA GND
- * 
+
  *  - GPIO 2  ---> Button 1
  *  - GPIO 4  ---> Button 2
  *  - GPIO 5  ---> Button 3
@@ -106,6 +99,13 @@ unsigned short * address_pointer2 = &DAC_data[0] ;
 #define PIN_SCK  10  // Update to GPIO 10 for spi1
 #define PIN_MOSI 11  // Update to GPIO 11 for spi1
 #define SPI_PORT spi1  // Change to spi1
+// We use SPI0 because SPI1 is busy with the screen.
+
+// DAC Command for Sound
+// Channel A (Left), Gain 1x, Active
+#define AUDIO_CMD_A 0x3000 
+// Channel B (Right), Gain 1x, Active
+#define AUDIO_CMD_B 0xB000
 
 // Number of DMA transfers per event
 const uint32_t transfer_count = dds_sine_table_size ;
@@ -927,12 +927,12 @@ void initStats() {
 
   fillRect(155, 260, 60, 8, BLACK);
   setCursor(155, 260);
-  sprintf(stats_str, "WaterFlow: %.1f", waterFlow);
+  sprintf(stats_str, "WaterFlow: %.1f kg/s", waterFlow);
   writeString(stats_str);
 
   fillRect(360, 260, 100, 8, BLACK);
   setCursor(360, 260);
-  sprintf(stats_str, "Sim Speed: %d", 1/*sim_speed*/);  // Commented variable
+  sprintf(stats_str, " Sim Speed: %d", 1/*sim_speed*/);  // Commented variable
   writeString(stats_str);
 
   fillRect(480, 260, 120, 8, BLACK);
@@ -945,82 +945,89 @@ int stats_counter = 0;
 
 void refreshStats() {
   char stats_str[40];
-  // uint32_t seconds = time_us_32() / 1000000; // (Unused variable removed)
+
+  // We check 'stats_counter' to update only one text item per frame
+  // This prevents flickering.
 
   if (stats_counter == 0) {
-    // Spare time (Cpu usage)
-    setTextColor(BLACK);
+    // 1. SPARE TIME (Right Edge)
+    setTextColor(BLACK); // Clear previous (or use fillRect)
     
-    // Increased width from 70 to 90 to prevent overlap
-    fillRect(587, 247, 90, 8, WHITE); 
-    setCursor(587, 247);
-    sprintf(stats_str, "%d us", spare_time);
+    // Move to x=550 to align right
+    fillRect(550, 247, 90, 8, WHITE); 
+    setCursor(550, 247);
+    sprintf(stats_str, "Spare: %d", spare_time);
     writeString(stats_str);
   } 
   else if (stats_counter == 1) {
-    // Active Neutrons
+    // 2. ACTIVE NEUTRONS (Move to Left)
     setTextColor(WHITE);
 
-    // FIX: Increased width from 25 to 50
-    fillRect(58, 260, 50, 8, BLACK); 
-    setCursor(58, 260);
-    sprintf(stats_str, "%d", neutrons_active);
+    // Old x=58. New x=10 (Give it room)
+    // Width 90 clears "N Active: 2000" fully
+    fillRect(10, 260, 90, 8, BLACK); 
+    setCursor(10, 260);
+    sprintf(stats_str, "N Active: %d", neutrons_active);
     writeString(stats_str);
   } 
   else if (stats_counter == 2){
-    // Target Neutrons
+    // 3. TARGET NEUTRONS (Shift Right)
     setTextColor(WHITE);
 
-    // FIX: Increased width from 25 to 50
-    fillRect(127, 260, 50, 8, BLACK);
-    setCursor(127, 260);
-    sprintf(stats_str, "%d", neutrons_target_num);
+    // Old x=127. New x=110 (Safe distance from Active)
+    fillRect(110, 260, 80, 8, BLACK);
+    setCursor(110, 260);
+    sprintf(stats_str, "Target: %d", neutrons_target_num);
     writeString(stats_str);
   }
   else if (stats_counter == 3){
-    // Water Flow
+    // 4. WATER FLOW
     setTextColor(WHITE);
 
-    // FIX: Increased width from 32 to 50
-    fillRect(215, 260, 50, 8, BLACK);
-    setCursor(215, 260);
-    sprintf(stats_str, "%.1f", waterFlow);
+    // Old x=215. New x=200
+    fillRect(200, 260, 90, 8, BLACK);
+    setCursor(200, 260);
+    sprintf(stats_str, "Flow: %.2f kg/s", waterFlow);
     writeString(stats_str);
   } 
   else if (stats_counter == 4){
-    // Auto/Manual Text
+    // 5. AUTO / MANUAL
     setTextColor(RED);
 
-    fillRect(300, 260, 50, 8, BLACK); // Increased width
+    // Old x=300. Keep x=300 (It fits now)
+    fillRect(340, 260, 110, 8, BLACK);
+    
     if (auto_mode == 1) {
-      setCursor(307, 260);
-      sprintf(stats_str, "Auto");
+      setCursor(340, 260);
+      sprintf(stats_str, " Auto");
     } else {
-      setCursor(303, 260);
-      sprintf(stats_str, "Manual");
+      setCursor(340, 260);
+      sprintf(stats_str, " Manual");
     }
     writeString(stats_str);
   }
   else if (stats_counter == 5){
-      // Sim Speed
+      // 6. SIM SPEED
       setTextColor(WHITE);
 
-      fillRect(420, 260, 50, 8, BLACK); // Increased width
+      // Old x=420. Keep x=420
+      fillRect(420, 260, 80, 8, BLACK); 
       setCursor(420, 260);
       if (sim_speed_state == 0) {
-        sprintf(stats_str, "100%%");
+        sprintf(stats_str, "Speed: 100%%");
       } else{
-        sprintf(stats_str, "50%%");
+        sprintf(stats_str, "Speed: 50%%");
       }
       writeString(stats_str);
     }
     else if (stats_counter == 6){
-      // Neutron Decay (Spawn Rate)
+      // 7. SPAWN RATE
       setTextColor(WHITE);
 
-      fillRect(545, 260, 50, 8, BLACK); // Increased width
-      setCursor(545, 260);
-      sprintf(stats_str, "%d", numNeutronSpawn); 
+      // Old x=545. New x=520 to prevent edge clipping
+      fillRect(520, 260, 80, 8, BLACK); 
+      setCursor(520, 260);
+      sprintf(stats_str, "Spawn: %d " , numNeutronSpawn); 
       writeString(stats_str);
     }
 
@@ -1095,9 +1102,33 @@ void drawChartAxes(int x0, int y0) {
     setCursor(x0 + CHART_WIDTH/2 - 20, y0 + CHART_HEIGHT - 10);
     writeString("Time (s)");
 }
+void drawGraphOverlay() {
+    // --- Left Chart Legend ---
+    // We redraw this every frame so the "eraser bar" doesn't kill it
+    int y_text = CHART_Y + 6; // Just inside the top of the box
+
+    setTextColor(BLUE);
+    setCursor(LEFT_CHART_X + 6, y_text); 
+    writeString("- Power");
+
+    setTextColor(DARK_GREEN);
+    setCursor(LEFT_CHART_X + 6, y_text + 10); 
+    writeString("- Rods");
+
+    setTextColor(WHITE);
+    setCursor(LEFT_CHART_X + 6, y_text + 20); 
+    writeString("- Xenon");
+
+    // --- Right Chart Legend ---
+    setTextColor(WHITE);
+    setCursor(RIGHT_CHART_X + 6, y_text);
+    writeString("Rate");
+}
 
 void drawLegend(void) {
-  // Fixed coordinates for left edge of screen
+  // ==========================================
+  // PART 1: REACTOR GRID LEGEND (White Strip)
+  // ==========================================
   int x0 = 10;
   int y0 = 250;
   int circle_radius = 4;
@@ -1134,7 +1165,7 @@ void drawLegend(void) {
   setTextSize(1);
   writeString("Water");
 
-  int steam_x = water_x + square_size * 3 + 50; // Add spacing after "Water"
+  int steam_x = water_x + square_size * 3 + 50; 
   fillRect(steam_x, y0 - 4, square_size, square_size, CYAN);
   
   setCursor(steam_x + square_size + 5, y0 - 3);
@@ -1173,12 +1204,36 @@ void drawLegend(void) {
   setTextSize(1);
   writeString("Control");
 
-  // Set text properties
-  setCursor(control_x + rect_width + 5 + spacing, y0 - 3);
-  setTextColor(BLACK);
-  setTextSize(1);
-  setTextWrap(0);
-  writeString("Spare: us");
+  // ==========================================
+  // PART 2: BOTTOM CHART LEGENDS (Overlay)
+  // ==========================================
+  // We draw this text directly onto the black chart background.
+  // Note: These coordinates assume CHART_Y and LEFT_CHART_X are defined.
+  // If not, replace (CHART_Y + 5) with a hard number like 285.
+
+  // --- Left Chart (Trends) ---
+  int legend_y_charts = CHART_Y + 5; // Top of the chart area
+
+  setTextColor(BLUE);
+  setCursor(LEFT_CHART_X + 5, legend_y_charts); 
+  writeString("- Power (Flux)");
+
+  setTextColor(DARK_GREEN);
+  setCursor(LEFT_CHART_X + 5, legend_y_charts + 10); // Shift down
+  writeString("- Rod Position");
+
+  setTextColor(WHITE);
+  setCursor(LEFT_CHART_X + 5, legend_y_charts + 20); // Shift down
+  writeString("- Xenon Level");
+
+  // --- Right Chart (Oscilloscope) ---
+  setTextColor(WHITE);
+  setCursor(RIGHT_CHART_X + 5, legend_y_charts);
+  writeString("- Reaction Rate");
+
+  setTextColor(WHITE); // Optional unit label
+  setCursor(RIGHT_CHART_X + 5, legend_y_charts + 10);
+  writeString("(Events / 50ms)");
 }
 
 float linear(float x) { return x; }
@@ -1842,13 +1897,13 @@ static PT_THREAD (protothread_anim(struct pt *pt))
     initNeutron();
     initGraphite();
     initControlRods();
-    drawLegend();
+
     initStats();
 
     // Clear Chart Backgrounds (Once at startup)
     fillRect(LEFT_CHART_X, CHART_Y, CHART_WIDTH, CHART_HEIGHT, BLACK);
     fillRect(RIGHT_CHART_X, CHART_Y, CHART_WIDTH, CHART_HEIGHT, BLACK);
-
+    drawLegend();
     while(1) {
       begin_time = time_us_32(); 
 
@@ -1931,7 +1986,7 @@ static PT_THREAD (protothread_anim(struct pt *pt))
           uranium_collision_count = 0;
           last_collision_time = time_us_32();
       }
-
+      drawGraphOverlay(); // <--- Re-stamps the text on top of the eraser!
       // Advance Left Chart Cursor
       plotX++;
       if (plotX >= LEFT_CHART_X + AXIS_MARGIN + AXIS_LENGTH_X) plotX = LEFT_CHART_X + AXIS_MARGIN;
@@ -1972,181 +2027,156 @@ static PT_THREAD (protothread_anim(struct pt *pt))
 // === main
 // ========================================
 // USE ONLY C-sdk library
-int main(){
+// ==========================================
+// FIXED MAIN FUNCTION
+// ==========================================
+int main() {
+    stdio_init_all();
 
-  // gpio_set_function(0, GPIO_FUNC_UART);
-  // gpio_set_function(1, GPIO_FUNC_UART);
-  // uart_init(uart0, 115200);
+    // ----------------------------------------
+    // 1. SETUP AUDIO SYSTEM (SPI0)
+    // ----------------------------------------
+    // Define Audio Pins (Hardcoded here for safety)
+    #define AUDIO_SPI_PORT spi0
+    #define AUDIO_PIN_SCK  18 // Pin 24
+    #define AUDIO_PIN_MOSI 19 // Pin 25
+    #define AUDIO_PIN_CS   17 // Pin 22
+    
+    // Initialize SPI0 at 20 MHz
+    spi_init(AUDIO_SPI_PORT, 20000000);
+    spi_set_format(AUDIO_SPI_PORT, 16, 0, 0, 0);
 
-  // initialize stio
-  stdio_init_all() ;
-  // Initialize SPI channel (channel, baud rate set to 20MHz)
-  spi_init(SPI_PORT, 20000000) ;
+    // Set GPIO functions for Audio
+    gpio_set_function(AUDIO_PIN_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(AUDIO_PIN_MOSI, GPIO_FUNC_SPI);
+    gpio_set_function(AUDIO_PIN_CS, GPIO_FUNC_SPI); // Hardware manages CS
 
-  // Format SPI channel (channel, data bits per transfer, polarity, phase, order)
-  spi_set_format(SPI_PORT, 16, 0, 0, 0);
+    // ----------------------------------------
+    // 2. SETUP DISPLAY SYSTEM (SPI1)
+    // ----------------------------------------
+    // Initialize SPI1 for the Screen
+    spi_init(SPI_PORT, 20000000);
+    spi_set_format(SPI_PORT, 16, 0, 0, 0);
 
-  // Map SPI signals to GPIO ports, acts like framed SPI with this CS mapping
-  gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-  gpio_set_function(PIN_CS, GPIO_FUNC_SPI) ;
-  gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
-  gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
-  // Build sine table and DAC data table
+    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_CS,   GPIO_FUNC_SPI);
+    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+
+    // ----------------------------------------
+    // 3. BUILD SINE WAVE & BUFFERS
+    // ----------------------------------------
     int i;
     float attack_factor;
+    // Channel A Config: Gain 1x, Active
+    //uint16_t DAC_config_chan_A = 0x3000; 
+
     for (i = 0; i < dds_sine_table_size; i++) {
-        // 4x base frequency, ultra-high harmonics
         float base = sin((float)i * 25.132 / (float)dds_sine_table_size);
         float harm1 = 0.95 * sin(2 * (float)i * 25.132 / (float)dds_sine_table_size);
-        float harm2 = 0.90 * sin(4 * (float)i * 25.132 / (float)dds_sine_table_size);
-        float harm3 = 0.85 * sin(8 * (float)i * 25.132 / (float)dds_sine_table_size);
-        float harm4 = 0.80 * sin(12 * (float)i * 25.132 / (float)dds_sine_table_size);
-        float harm5 = 0.75 * sin(14 * (float)i * 25.132 / (float)dds_sine_table_size);
-        float harm6 = 0.70 * sin(15 * (float)i * 25.132 / (float)dds_sine_table_size);
-        float harm7 = 0.65 * sin(16 * (float)i * 25.132 / (float)dds_sine_table_size);
         
-        // Ultra-sharp attack
         attack_factor = 1.0 - ((float)i / dds_sine_table_size);
         attack_factor = pow(attack_factor, 0.15);
         
-        // Enhanced combination with more harmonics
-        float combined = (base + harm1 + harm2 + harm3 + harm4 + harm5 + harm6 + harm7) * attack_factor;
-        combined = tanh(combined * 2.0); // More aggressive saturation
+        float combined = (base + harm1) * attack_factor;
+        combined = tanh(combined * 2.0); 
         
-        // Scale to 12-bit range with slight boost
         raw_sin[i] = (int)(2047 * combined + 2047);
-        
         if (raw_sin[i] > 4095) raw_sin[i] = 4095;
         if (raw_sin[i] < 0) raw_sin[i] = 0;
         
         DAC_data[i] = DAC_config_chan_A | (raw_sin[i] & 0x0fff);
     }
 
-  
-  // Select DMA channels
-  data_chan = dma_claim_unused_channel(true);;
-  ctrl_chan = dma_claim_unused_channel(true);;
+    // ----------------------------------------
+    // 4. SETUP DMA (THE CRITICAL FIX)
+    // ----------------------------------------
+    data_chan = dma_claim_unused_channel(true);
+    ctrl_chan = dma_claim_unused_channel(true);
 
-  // Setup the control channel
-  dma_channel_config c = dma_channel_get_default_config(ctrl_chan);   // default configs
-  channel_config_set_transfer_data_size(&c, DMA_SIZE_32);             // 32-bit txfers
-  channel_config_set_read_increment(&c, false);                       // no read incrementing
-  channel_config_set_write_increment(&c, false);                      // no write incrementing
-  channel_config_set_chain_to(&c, data_chan);                         // chain to data channel
+    // Control Channel (Looping)
+    dma_channel_config c = dma_channel_get_default_config(ctrl_chan);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    channel_config_set_read_increment(&c, false);
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_chain_to(&c, data_chan);
 
-  dma_channel_configure(
-      ctrl_chan,                          // Channel to be configured
-      &c,                                 // The configuration we just created
-      &dma_hw->ch[data_chan].read_addr,   // Write address (data channel read address)
-      &address_pointer2,                   // Read address (POINTER TO AN ADDRESS)
-      1,                                  // Number of transfers
-      false                               // Don't start immediately
-  );
+    dma_channel_configure(
+        ctrl_chan,
+        &c,
+        &dma_hw->ch[data_chan].read_addr,
+        &address_pointer2,
+        1,
+        false
+    );
 
-  // Setup the data channel
-  dma_channel_config c2 = dma_channel_get_default_config(data_chan);  // Default configs
-  channel_config_set_transfer_data_size(&c2, DMA_SIZE_16);            // 16-bit txfers
-  channel_config_set_read_increment(&c2, true);                       // yes read incrementing
-  channel_config_set_write_increment(&c2, false);                     // no write incrementing
-  // (X/Y)*sys_clk, where X is the first 16 bytes and Y is the second
-  // sys_clk is 125 MHz unless changed in code. Configured to ~44 kHz
-  dma_timer_set_fraction(0, 0x0017, 0xffff) ;
-  // 0x3b means timer0 (see SDK manual)
-  channel_config_set_dreq(&c2, 0x3b);                                 // DREQ paced by timer 0
-  // chain to the controller DMA channel
-  // channel_config_set_chain_to(&c2, ctrl_chan);                        // Chain to control channel
+    // Data Channel (Sending to SPI0)
+    dma_channel_config c2 = dma_channel_get_default_config(data_chan);
+    channel_config_set_transfer_data_size(&c2, DMA_SIZE_16);
+    channel_config_set_read_increment(&c2, true);
+    channel_config_set_write_increment(&c2, false);
+    
+    // Audio Pacing (~44kHz)
+    dma_timer_set_fraction(0, 0x0017, 0xffff);
+    channel_config_set_dreq(&c2, 0x3b); // DREQ_TIMER0
 
+    dma_channel_configure(
+        data_chan,
+        &c2,
+        &spi_get_hw(AUDIO_SPI_PORT)->dr, // <--- FIXED: Sends to Audio SPI0
+        DAC_data,
+        dds_sine_table_size,
+        false
+    );
 
-  dma_channel_configure(
-      data_chan,                  // Channel to be configured
-      &c2,                        // The configuration we just created
-      &spi_get_hw(SPI_PORT)->dr,  // write address (SPI data register)
-      DAC_data,                   // The initial read address
-      dds_sine_table_size,            // Number of transfers
-      false                       // Don't start immediately.
-  );
+    // START THE ENGINE! (You were missing this!)
+    dma_start_channel_mask(1u << ctrl_chan);
 
+    // ----------------------------------------
+    // 5. REMAINING SETUP
+    // ----------------------------------------
+    avail_Neutrons_top = 2000 - neutrons_active;
+    initVGA();
+    srand(time_us_32());
 
+    // Generate Sin Table for Simulation
+    for (int i = 0; i < sine_table_size; i++){
+        sin_table[i] = float2fix15(sin((float)i * piOver2 / (float)(sine_table_size)));
+    } 
 
-  //=================Simulation inits=========================
-  avail_Neutrons_top = 2000 - neutrons_active;
-  // num_non_fissile_active = 280 - num_uranium_active - num_xenon_active;
+    multicore_reset_core1();
+    multicore_launch_core1(&core1_main);
 
+    // GPIO Inits for Encoders/Buttons
+    gpio_init(ENCODER_CLK); gpio_set_dir(ENCODER_CLK, GPIO_IN); gpio_pull_up(ENCODER_CLK);
+    gpio_init(ENCODER_DT);  gpio_set_dir(ENCODER_DT, GPIO_IN);  gpio_pull_up(ENCODER_DT);
+    last_CLK_state = gpio_get(ENCODER_CLK);
 
-  // initialize VGA
-  initVGA() ;
+    gpio_init(ENCODER2_CLK); gpio_set_dir(ENCODER2_CLK, GPIO_IN); gpio_pull_up(ENCODER2_CLK);
+    gpio_init(ENCODER2_DT);  gpio_set_dir(ENCODER2_DT, GPIO_IN);  gpio_pull_up(ENCODER2_DT);
+    last_CLK_state2 = gpio_get(ENCODER2_CLK);
 
-  // Seed the random number generator with the current time
-  srand(time_us_32());
+    gpio_init(ENCODER3_CLK); gpio_set_dir(ENCODER3_CLK, GPIO_IN); gpio_pull_up(ENCODER3_CLK);
+    gpio_init(ENCODER3_DT);  gpio_set_dir(ENCODER3_DT, GPIO_IN);  gpio_pull_up(ENCODER3_DT);
+    last_CLK_state3 = gpio_get(ENCODER3_CLK);
 
-  //generate sine table from 0 to pi/2
-  for (int i = 0; i < sine_table_size; i++){
-    sin_table[i] = float2fix15(sin((float)i * piOver2 / (float)(sine_table_size))) ;
-  } 
+    gpio_init(ENCODER4_CLK); gpio_set_dir(ENCODER4_CLK, GPIO_IN); gpio_pull_up(ENCODER4_CLK);
+    gpio_init(ENCODER4_DT);  gpio_set_dir(ENCODER4_DT, GPIO_IN);  gpio_pull_up(ENCODER4_DT);
+    last_CLK_state4 = gpio_get(ENCODER4_CLK);
 
-  // start core 1 
-  multicore_reset_core1();
-  multicore_launch_core1(&core1_main);
+    gpio_init(PIN_BUTTON_1); gpio_set_dir(PIN_BUTTON_1, GPIO_IN); gpio_pull_up(PIN_BUTTON_1);
+    gpio_init(PIN_BUTTON_2); gpio_set_dir(PIN_BUTTON_2, GPIO_IN); gpio_pull_up(PIN_BUTTON_2);
+    gpio_init(PIN_BUTTON_3); gpio_set_dir(PIN_BUTTON_3, GPIO_IN); gpio_pull_up(PIN_BUTTON_3);
+    gpio_init(PIN_BUTTON_4); gpio_set_dir(PIN_BUTTON_4, GPIO_IN); gpio_pull_up(PIN_BUTTON_4);
 
-  //stdio_uart_init_full(uart0, 0, 0, 0);  // Disable UART0
+    pt_add_thread(protothread_serial);
+    pt_add_thread(protothread_anim);
+    pt_add_thread(protothread_encoder);
+    pt_add_thread(protothread_encoder2); 
+    pt_add_thread(protothread_encoder3);
+    pt_add_thread(protothread_encoder4);
+    pt_add_thread(protothread_buttons);
 
-
-  gpio_init(ENCODER_CLK);
-  gpio_init(ENCODER_DT);
-  gpio_set_dir(ENCODER_CLK, GPIO_IN);
-  gpio_set_dir(ENCODER_DT, GPIO_IN);
-  gpio_pull_up(ENCODER_CLK);
-  gpio_pull_up(ENCODER_DT);
-  last_CLK_state = gpio_get(ENCODER_CLK);
-  gpio_init(ENCODER2_CLK);
-  gpio_init(ENCODER2_DT);
-  gpio_set_dir(ENCODER2_CLK, GPIO_IN);
-  gpio_set_dir(ENCODER2_DT, GPIO_IN);
-  gpio_pull_up(ENCODER2_CLK);
-  gpio_pull_up(ENCODER2_DT);
-  last_CLK_state2 = gpio_get(ENCODER2_CLK);
-
-  gpio_init(ENCODER3_CLK);
-  gpio_set_dir(ENCODER3_CLK, GPIO_IN);
-  gpio_pull_up(ENCODER3_CLK);
-  gpio_init(ENCODER3_DT);
-  gpio_set_dir(ENCODER3_DT, GPIO_IN);
-  gpio_pull_up(ENCODER3_DT);
-  last_CLK_state3 = gpio_get(ENCODER3_CLK);
-
-  gpio_init(ENCODER4_CLK);
-  gpio_set_dir(ENCODER4_CLK, GPIO_IN);
-  gpio_pull_up(ENCODER4_CLK);
-  gpio_init(ENCODER4_DT);
-  gpio_set_dir(ENCODER4_DT, GPIO_IN);
-  gpio_pull_up(ENCODER4_DT);
-  last_CLK_state4 = gpio_get(ENCODER4_CLK);
-
-
-  //Button GPIO
-  gpio_init(PIN_BUTTON_1) ;
-  gpio_set_dir(PIN_BUTTON_1, GPIO_IN) ;
-  gpio_pull_up(PIN_BUTTON_1) ;
-  
-  gpio_init(PIN_BUTTON_2); 
-  gpio_set_dir(PIN_BUTTON_2, GPIO_IN);
-  gpio_pull_up(PIN_BUTTON_2);
-  
-  gpio_init(PIN_BUTTON_3); 
-  gpio_set_dir(PIN_BUTTON_3, GPIO_IN);
-  gpio_pull_up(PIN_BUTTON_3);
-
-  gpio_init(PIN_BUTTON_4); 
-  gpio_set_dir(PIN_BUTTON_4, GPIO_IN);
-  gpio_pull_up(PIN_BUTTON_4);
-  pt_add_thread(protothread_serial);
-  pt_add_thread(protothread_anim);
-  pt_add_thread(protothread_encoder);
-  pt_add_thread(protothread_encoder2); 
-  pt_add_thread(protothread_encoder3);
-  pt_add_thread(protothread_encoder4);
-  pt_add_thread(protothread_buttons);
-  // =======================
-  // start scheduler
-  pt_schedule_start ;
-}									
+    pt_schedule_start;
+    return 0;
+}
